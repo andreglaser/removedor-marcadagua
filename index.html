@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Removedor de Marca d'água</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="file"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .result {
+            margin-top: 20px;
+        }
+        .result img {
+            max-width: 100%;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .loading {
+            text-align: center;
+            display: none;
+        }
+        .api-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+        code {
+            background-color: #f1f1f1;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        .url-box {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .input-group {
+            display: flex;
+            margin-top: 5px;
+        }
+        .url-input {
+            flex-grow: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px 0 0 4px;
+            font-family: monospace;
+        }
+        .copy-btn {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 0 4px 4px 0;
+            cursor: pointer;
+        }
+        .copy-btn:hover {
+            background-color: #5a6268;
+        }
+    </style>
+</head>
+<body>
+    <h1>Removedor de Marca d'água</h1>
+    
+    <div class="container">
+        <div class="card">
+            <h2>Upload de Imagem</h2>
+            <form id="uploadForm" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="imageFile">Selecione uma imagem:</label>
+                    <input type="file" id="imageFile" name="image" accept="image/*" required>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="uploadToImgBB" name="upload_to_imgbb" value="true" checked>
+                        Fazer upload para o ImgBB (obter URL direta)
+                    </label>
+                </div>
+                <button type="submit">Processar Imagem</button>
+            </form>
+            <div class="loading" id="uploadLoading">
+                <p>Processando...</p>
+            </div>
+            <div class="result" id="uploadResult"></div>
+        </div>
+
+        <div class="card">
+            <h2>URL da Imagem</h2>
+            <div class="form-group">
+                <label for="imageUrl">URL da imagem:</label>
+                <input type="text" id="imageUrl" placeholder="https://exemplo.com/imagem.jpg">
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="urlUploadToImgBB" checked>
+                    Fazer upload para o ImgBB (obter URL direta)
+                </label>
+            </div>
+            <button id="processUrlBtn">Processar URL</button>
+            <div class="loading" id="urlLoading">
+                <p>Processando...</p>
+            </div>
+            <div class="result" id="urlResult"></div>
+        </div>
+
+        <div class="card api-info">
+            <h2>Informações da API</h2>
+            <p>Você pode usar esta API diretamente em suas aplicações:</p>
+            <p><strong>Endpoint:</strong> <code>/api/remove-watermark</code></p>
+            <p><strong>Método:</strong> <code>POST</code></p>
+            <p><strong>Corpo da requisição:</strong></p>
+            <pre><code>{
+    "url": "https://exemplo.com/imagem.jpg",
+    "upload_to_imgbb": true  // opcional, padrão é true
+}</code></pre>
+            <p><strong>Resposta (quando upload_to_imgbb=true):</strong></p>
+            <pre><code>{
+    "success": true,
+    "url": "https://i.ibb.co/exemplo/imagem.png",
+    "display_url": "https://i.ibb.co/exemplo/imagem.png"
+}</code></pre>
+            <p><strong>Resposta (quando upload_to_imgbb=false):</strong></p>
+            <pre><code>{
+    "success": true,
+    "image": "base64_encoded_image_data"
+}</code></pre>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const fileInput = document.getElementById('imageFile');
+            if (!fileInput.files[0]) {
+                alert('Por favor, selecione uma imagem.');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('image', fileInput.files[0]);
+            
+            // Verificar se o checkbox de upload para ImgBB está marcado
+            const uploadToImgBB = document.getElementById('uploadToImgBB').checked;
+            if (uploadToImgBB) {
+                formData.append('upload_to_imgbb', 'true');
+            }
+
+            document.getElementById('uploadLoading').style.display = 'block';
+            document.getElementById('uploadResult').innerHTML = '';
+
+            try {
+                const response = await fetch('/remove-watermark', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    if (uploadToImgBB) {
+                        // Se foi feito upload para o ImgBB, exibir a URL
+                        const data = await response.json();
+                        if (data.success) {
+                            const resultDiv = document.getElementById('uploadResult');
+                            
+                            // Criar elemento para exibir a imagem
+                            const img = document.createElement('img');
+                            img.src = data.display_url;
+                            img.style.maxWidth = '100%';
+                            img.style.marginBottom = '10px';
+                            resultDiv.appendChild(img);
+                            
+                            // Criar elemento para exibir a URL
+                            const urlBox = document.createElement('div');
+                            urlBox.className = 'url-box';
+                            urlBox.innerHTML = `
+                                <p><strong>URL da imagem:</strong></p>
+                                <div class="input-group">
+                                    <input type="text" value="${data.url}" readonly class="url-input" />
+                                    <button class="copy-btn" onclick="copyToClipboard(this.previousElementSibling)">Copiar</button>
+                                </div>
+                            `;
+                            resultDiv.appendChild(urlBox);
+                        } else {
+                            alert('Erro: ' + (data.error || 'Falha ao processar a imagem'));
+                        }
+                    } else {
+                        // Se não foi feito upload para o ImgBB, baixar a imagem
+                        const blob = await response.blob();
+                        const url = URL.createObjectURL(blob);
+                        window.open(url, '_blank');
+                    }
+                } else {
+                    const error = await response.json();
+                    alert('Erro: ' + error.error);
+                }
+            } catch (error) {
+                alert('Erro ao processar a imagem: ' + error.message);
+            } finally {
+                document.getElementById('uploadLoading').style.display = 'none';
+            }
+        });
+
+        document.getElementById('processUrlBtn').addEventListener('click', async function() {
+            const imageUrl = document.getElementById('imageUrl').value.trim();
+            if (!imageUrl) {
+                alert('Por favor, insira uma URL de imagem válida.');
+                return;
+            }
+
+            // Verificar se o checkbox de upload para ImgBB está marcado
+            const uploadToImgBB = document.getElementById('urlUploadToImgBB').checked;
+
+            document.getElementById('urlLoading').style.display = 'block';
+            document.getElementById('urlResult').innerHTML = '';
+
+            try {
+                const response = await fetch('/remove-watermark', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        url: imageUrl,
+                        upload_to_imgbb: uploadToImgBB
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    const resultDiv = document.getElementById('urlResult');
+                    
+                    if (uploadToImgBB) {
+                        // Se foi feito upload para o ImgBB, exibir a URL
+                        // Criar elemento para exibir a imagem
+                        const img = document.createElement('img');
+                        img.src = data.display_url;
+                        img.style.maxWidth = '100%';
+                        img.style.marginBottom = '10px';
+                        resultDiv.appendChild(img);
+                        
+                        // Criar elemento para exibir a URL
+                        const urlBox = document.createElement('div');
+                        urlBox.className = 'url-box';
+                        urlBox.innerHTML = `
+                            <p><strong>URL da imagem:</strong></p>
+                            <div class="input-group">
+                                <input type="text" value="${data.url}" readonly class="url-input" />
+                                <button class="copy-btn" onclick="copyToClipboard(this.previousElementSibling)">Copiar</button>
+                            </div>
+                        `;
+                        resultDiv.appendChild(urlBox);
+                    } else {
+                        // Se não foi feito upload para o ImgBB, exibir a imagem em base64
+                        const img = document.createElement('img');
+                        img.src = 'data:image/png;base64,' + data.image;
+                        resultDiv.appendChild(img);
+                    }
+                } else {
+                    alert('Erro: ' + data.error);
+                }
+            } catch (error) {
+                alert('Erro ao processar a imagem: ' + error.message);
+            } finally {
+                document.getElementById('urlLoading').style.display = 'none';
+            }
+        });
+        
+        // Função para copiar texto para a área de transferência
+        function copyToClipboard(inputElement) {
+            inputElement.select();
+            document.execCommand('copy');
+            alert('URL copiada para a área de transferência!');
+        }
+    </script>
+</body>
+</html>
